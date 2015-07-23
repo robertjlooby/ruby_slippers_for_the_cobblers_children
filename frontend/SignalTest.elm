@@ -1,6 +1,7 @@
 import Debug
 import Task exposing (Task)
 import Graphics.Element exposing (Element, show)
+import Time exposing (every, second)
 
 type alias MyModel = (Int, String)
 
@@ -62,11 +63,23 @@ update (count1, str1) (count2, str2) =
 port emitAll : Signal (Task x ())
 port emitAll = Signal.map emitNextModel modelSignals
 
-emitNextModel : MyModel -> Task x ()
-emitNextModel model = Signal.send mailbox.address model
+-- if it gets an empty list, just sends along an "empty" MyModel that doesn't
+-- modify the displayed result
+emitNextModel : List MyModel -> Task x ()
+emitNextModel models =
+  case List.head models of
+    Just model ->
+      Signal.send mailbox.address model
+    Nothing ->
+      Signal.send mailbox.address (0, "")
 
-modelSignals : Signal MyModel
-modelSignals = Signal.mergeMany (List.map Signal.constant modelValues)
+-- pulls a MyModel off the list every second until empty, then sends along
+-- an empty list each second
+modelSignals : Signal (List MyModel)
+modelSignals = Signal.foldp
+                 (\t models -> List.tail models |> Maybe.withDefault [])
+                 modelValues
+                 (Time.every Time.second)
 
 modelValues : List MyModel
 modelValues = [(1,"a"), (2, "b"), (3, "b")]
